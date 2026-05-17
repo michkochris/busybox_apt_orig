@@ -1,0 +1,13 @@
+# DO NOT EDIT. This file is generated from Config.src
+menu "Busybox APT"
+
+config APT
+	bool "apt (8 kb)"
+	default y
+	select DPKG
+	help
+	apt is a high-level package manager for Debian-based systems.
+	It provides repository management and dependency resolution
+	as a frontend to dpkg.
+
+endmenu
