@@ -9,23 +9,29 @@
 - **Professional UI**: Familiar output format with "Get:N", "Hit:N", and colored highlights.
 - **Progress Tracking**: Real-time progress bar at the bottom of the terminal during installations.
 - **Repository Management**: Supports standard Debian-style `sources.list` files.
-- **Dependency Resolution**: Automatically resolves and fetches recursive dependencies.
+- **Dependency Resolution**: Automatically resolves recursive dependencies, including support for **Virtual Packages** via the `Provides:` field.
+- **Embedded-Friendly Dependencies**: To respect user freedom and keep systems lightweight, **Recommended packages are NOT installed by default**, though they are listed during resolution.
+- **Debian-Style Versioning**: Robust version comparison logic including support for epochs, revisions, and the special `~` sorting character.
 - **Safety Checks**: Confirmation prompts and download size calculations before any changes.
 - **Optimized for BusyBox**: Minimal footprint, written in C and fully integrated into the Kbuild system.
 
 ## Usage
 
 ```
-Usage: apt COMMAND [PACKAGE...]
+Usage: apt [-f] COMMAND [PACKAGE...]
 
 High-level package manager
 
+Options:
+    -f, --fix-broken    Pass --force-depends to dpkg
+
 Commands:
-    update      Update list of available packages
-    install     Install new packages
-    remove      Remove packages
-    upgrade     Upgrade the system by installing/upgrading packages
-    search      Search for a package
+    update              Update list of available packages
+    install             Install new packages
+    remove              Remove packages
+    upgrade             Upgrade the system
+    list --upgradable   Show packages with available updates
+    search              Search for a package (alphabetically sorted)
 ```
 
 ### Examples
@@ -33,7 +39,9 @@ Commands:
 - **Update package lists**: `./busybox apt update`
 - **Search for a package**: `./busybox apt search nano`
 - **Install a package**: `./busybox apt install nano`
+- **List upgradable**: `./busybox apt list --upgradable`
 - **Upgrade all packages**: `./busybox apt upgrade`
+- **Force install**: `./busybox apt -f install openbox` (forces dpkg depends)
 
 ## Build Instructions
 
