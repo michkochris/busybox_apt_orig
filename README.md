@@ -1,5 +1,7 @@
 # busybox_apt
 
+**Stable Release**
+
 `busybox_apt` is a lightweight, professional implementation of the Advanced Package Tool (APT) designed specifically as an applet for the BusyBox environment. It provides a high-level frontend to `dpkg`, handling repository management, dependency resolution, and automated updates with a UI that closely mimics standard Debian `apt`.
 
 ## Features
@@ -65,10 +67,8 @@ To integrate `busybox_apt` into your BusyBox build, follow these steps:
     make
     ```
 
-## Development and Stability
-
-This project has been developed with a focus on professional standards and robustness. It correctly handles version constraints in dependencies and performs batch installations to ensure circular dependencies are handled safely by `dpkg`.
-
 ---
 
-*I hope this tool enhances your BusyBox experience. Contributions and feedback are welcome!*
+## **Contact**
+For feedback, bug reports, or inquiries, reach out at:
+[michkochris@gmail.com](mailto:michkochris@gmail.com) | [runepkg@gmail.com](mailto:runepkg@gmail.com)
