@@ -82,7 +82,7 @@ Build Instructions:
 
   To integrate `busybox_apt` into your BusyBox build:
 
-  0. optionally wget busybox source
+  0. Optionally wget busybox source
 ```bash
 wget https://busybox.net/downloads/busybox-1.37.0.tar.bz2
 tar -xvjf busybox-1.37.0.tar.bz2
