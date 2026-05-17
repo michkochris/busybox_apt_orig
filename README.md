@@ -52,13 +52,13 @@ To integrate `busybox_apt` into your BusyBox build, follow these steps:
     *(Note: Ensure the directory is named `busybox_apt` as the build system expects this path.)*
 
 3.  **Build automatically**:
-    The easiest way to build is using the included automated script. It will configure BusyBox, enable `apt` and its dependencies, and compile the binary:
+    The easiest way to build is using the included automated script. **This script will automatically integrate the applet into the BusyBox build system for you**, configure it, and compile:
     ```bash
     ./busybox_apt/busybox_build.sh
     ```
 
-4.  **Alternative: Manual Build**:
-    If you prefer to configure things yourself, apply the patch first:
+4.  **Alternative: Manual Integration**:
+    If you prefer to integrate things yourself, use the provided patch file:
     ```bash
     patch -p0 < busybox_apt/busybox_apt.patch
     make menuconfig  # Enable 'apt' under 'Applets' -> 'Busybox APT'

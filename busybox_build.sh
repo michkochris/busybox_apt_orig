@@ -18,6 +18,27 @@ cd "$ROOT_DIR"
 
 echo "Starting BusyBox build process in $(pwd)..."
 
+# 0. Integrate into build system if not already done
+if ! grep -q "busybox_apt/Config.in" Config.in; then
+    echo "Integrating APT into Config.in..."
+    # Try to append after sysklogd, otherwise just append to the end
+    if grep -q "sysklogd/Config.in" Config.in; then
+        sed -i '/sysklogd\/Config.in/a source busybox_apt/Config.in' Config.in
+    else
+        echo "source busybox_apt/Config.in" >> Config.in
+    fi
+fi
+
+if ! grep -q "busybox_apt/" Makefile; then
+    echo "Integrating APT into Makefile..."
+    # Try to add before sysklogd
+    if grep -q "sysklogd/" Makefile; then
+        sed -i 's|sysklogd/|busybox_apt/ \\\n\t\tsysklogd/|' Makefile
+    else
+        sed -i '/libs-y/ s/$/ busybox_apt\//' Makefile
+    fi
+fi
+
 # WSL Detection and Fixes
 if grep -qi "microsoft" /proc/version; then
     echo "Detected WSL environment. Applying performance and permission tweaks..."
