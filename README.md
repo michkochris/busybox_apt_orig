@@ -36,7 +36,7 @@ Features:
     are listed but NOT installed by default.
 
 ----------------
-
+```bash
 Using busybox_apt:
 
   Usage: apt [-f] COMMAND [PACKAGE...]
@@ -57,7 +57,7 @@ Using busybox_apt:
       md5check            Verify package integrity (checks md5sums)
       list --upgradable   Show packages with available updates
       search              Search for a package (alphabetically sorted)
-
+```
   Examples:
 
     $ ./busybox apt update
