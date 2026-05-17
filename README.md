@@ -35,18 +35,34 @@ Commands:
 
 ## Build Instructions
 
-1.  Place the `busybox_apt` directory inside your BusyBox source tree.
-2.  Apply the provided patch to integrate the applet into the root configuration:
+To integrate `busybox_apt` into your BusyBox build, follow these steps:
+
+1.  **Download and extract BusyBox**:
     ```bash
-    patch -p0 < busybox_apt/busybox_apt.patch
+    wget https://busybox.net/downloads/busybox-1.37.0.tar.bz2
+    tar -xvjf busybox-1.37.0.tar.bz2
+    cd busybox-1.37.0
     ```
-3.  Alternatively, use the automated build script. This script is smart enough to be run from the BusyBox root **or** from within the `busybox_apt` directory:
+
+2.  **Clone this repository**:
+    Clone the `busybox_apt` tool into the root of your BusyBox source tree:
+    ```bash
+    git clone https://github.com/michkochris/busybox_apt_orig busybox_apt
+    ```
+    *(Note: Ensure the directory is named `busybox_apt` as the build system expects this path.)*
+
+3.  **Build automatically**:
+    The easiest way to build is using the included automated script. It will configure BusyBox, enable `apt` and its dependencies, and compile the binary:
     ```bash
     ./busybox_apt/busybox_build.sh
     ```
-4.  Enable `APT` in the configuration menu (under "Applets") if using manual config:
+
+4.  **Alternative: Manual Build**:
+    If you prefer to configure things yourself, apply the patch first:
     ```bash
-    make menuconfig
+    patch -p0 < busybox_apt/busybox_apt.patch
+    make menuconfig  # Enable 'apt' under 'Applets' -> 'Busybox APT'
+    make
     ```
 
 ## Development and Stability
