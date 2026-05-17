@@ -322,9 +322,11 @@ static void load_installed_packages(void)
 				while (token) {
 					char *clean = skip_whitespace(token);
 					char *p_spec = strpbrk(clean, " (:");
+					pkg_info_t *info;
+
 					if (p_spec) *p_spec = '\0';
 
-					pkg_info_t *info = xzalloc(sizeof(pkg_info_t));
+					info = xzalloc(sizeof(pkg_info_t));
 					info->name = xstrdup(clean);
 					info->size = 0;
 					llist_add_to(&installed_packages, info);
@@ -698,16 +700,17 @@ int apt_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
 static int check_deps_sanity(pkg_t *p)
 {
 	int failed_count = 0;
+	char *all_deps, *deps_copy, *saveptr, *dep_entry;
+
 	if (!p->depends && !p->pre_depends) return 0;
 
-	char *all_deps = xasprintf("%s%s%s",
+	all_deps = xasprintf("%s%s%s",
 		p->pre_depends ? p->pre_depends : "",
 		(p->pre_depends && p->depends) ? ", " : "",
 		p->depends ? p->depends : "");
 
-	char *deps_copy = xstrdup(all_deps);
-	char *saveptr;
-	char *dep_entry = strtok_r(deps_copy, ",", &saveptr);
+	deps_copy = xstrdup(all_deps);
+	dep_entry = strtok_r(deps_copy, ",", &saveptr);
 
 	while (dep_entry) {
 		char *or_saveptr;
@@ -843,6 +846,7 @@ int apt_main(int argc, char **argv)
 		llist_t *curr;
 		int count;
 		long total_size;
+		long total_installed_size;
 		char *dpkg_args;
 		llist_t *recommends_list = NULL;
 		int total;
@@ -906,7 +910,7 @@ int apt_main(int argc, char **argv)
 		printf("The following %sNEW%s packages will be installed:\n ", CLR_BOLD, CLR_RESET);
 		count = 0;
 		total_size = 0;
-		long total_installed_size = 0;
+		total_installed_size = 0;
 		for (curr = install_queue; curr; curr = curr->link) {
 			pkg_t *p = (pkg_t *)curr->data;
 			printf(" %s", p->name);
@@ -1021,6 +1025,7 @@ int apt_main(int argc, char **argv)
 		llist_t *curr;
 		int count;
 		long total_size;
+		long total_installed_size_upg;
 		char *dpkg_args;
 		llist_t *recommends_list = NULL;
 		int total_upg;
@@ -1109,7 +1114,7 @@ int apt_main(int argc, char **argv)
 		}
 
 		total_size = 0;
-		long total_installed_size_upg = 0;
+		total_installed_size_upg = 0;
 		printf("The following packages will be upgraded:\n ");
 		curr = install_queue;
 		count = 0;
@@ -1279,15 +1284,16 @@ int apt_main(int argc, char **argv)
 			if (p) {
 				printf("  [INFO] Version: %s\n", p->version);
 				if (installed) {
+					int d_failed, f_failed;
 					printf("  [CHECK] Dependencies... ");
 					fflush(stdout);
-					int d_failed = check_deps_sanity(p);
+					d_failed = check_deps_sanity(p);
 					if (d_failed == 0) printf("%sOK%s\n", CLR_GREEN, CLR_RESET);
 					else printf("%sFAILED (%d missing)%s\n", CLR_RED, d_failed, CLR_RESET);
 
 					printf("  [CHECK] Filesystem... ");
 					fflush(stdout);
-					int f_failed = check_files_sanity(argv[i]);
+					f_failed = check_files_sanity(argv[i]);
 					if (f_failed == 0) printf("%sOK%s\n", CLR_GREEN, CLR_RESET);
 					else printf("%sFAILED (%d issues)%s\n", CLR_RED, f_failed, CLR_RESET);
 
@@ -1326,29 +1332,31 @@ int apt_main(int argc, char **argv)
 			}
 
 			printf("Verifying %s...\n", argv[i]);
-			char *line;
-			int checked = 0, failed = 0;
-			while ((line = xmalloc_fgetline(f)) != NULL) {
-				char *md5 = strtok(line, " \t");
-				char *fname = strtok(NULL, " \t");
-				if (md5 && fname) {
-					/* Ensure fname has leading / if it doesn't */
-					char *path = (fname[0] == '/') ? xstrdup(fname) : xasprintf("/%s", fname);
-					char *cmd_md5 = xasprintf("echo \"%s  %s\" | md5sum -c --status 2>/dev/null", md5, path);
-					if (system(cmd_md5) != 0) {
-						printf("%s%s: FAILED%s\n", CLR_RED, path, CLR_RESET);
-						failed++;
+			{
+				char *line;
+				int checked = 0, failed = 0;
+				while ((line = xmalloc_fgetline(f)) != NULL) {
+					char *md5 = strtok(line, " \t");
+					char *fname = strtok(NULL, " \t");
+					if (md5 && fname) {
+						/* Ensure fname has leading / if it doesn't */
+						char *path = (fname[0] == '/') ? xstrdup(fname) : xasprintf("/%s", fname);
+						char *cmd_md5 = xasprintf("echo \"%s  %s\" | md5sum -c --status 2>/dev/null", md5, path);
+						if (system(cmd_md5) != 0) {
+							printf("%s%s: FAILED%s\n", CLR_RED, path, CLR_RESET);
+							failed++;
+						}
+						checked++;
+						free(cmd_md5);
+						free(path);
 					}
-					checked++;
-					free(cmd_md5);
-					free(path);
+					free(line);
 				}
-				free(line);
+				if (failed == 0)
+					printf("%sVerification successful:%s all %d files match md5sums.\n", CLR_GREEN, CLR_RESET, checked);
+				else
+					printf("%sVerification failed:%s %d of %d files are corrupted.\n", CLR_RED, CLR_RESET, failed, checked);
 			}
-			if (failed == 0)
-				printf("%sVerification successful:%s all %d files match md5sums.\n", CLR_GREEN, CLR_RESET, checked);
-			else
-				printf("%sVerification failed:%s %d of %d files are corrupted.\n", CLR_RED, CLR_RESET, failed, checked);
 
 			fclose(f);
 			free(sums_file);
