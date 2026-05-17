@@ -36,7 +36,7 @@ Features:
 
 ----------------
 Using busybox_apt:
-```bash
+```text
   Usage: apt [-f] COMMAND [PACKAGE...]
 
   High-level package management frontend
