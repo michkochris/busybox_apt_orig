@@ -67,6 +67,10 @@ To integrate `busybox_apt` into your BusyBox build, follow these steps:
     make
     ```
 
+## License
+
+This project is licensed under the **GNU General Public License, version 2 (GPLv2)**, matching the license of the BusyBox project. See the `LICENSE` file for the full text.
+
 ---
 
 ## **Contact**
