@@ -4,11 +4,10 @@ Please see the LICENSE file for details on copying and usage.
 
 What is busybox_apt:
 
-  `busybox_apt` is a lightweight, professional implementation of the Advanced
-  Package Tool (APT) designed specifically as an applet for the BusyBox
-  environment. It provides a high-level frontend to `dpkg`, handling repository
-  management, dependency resolution, and automated updates with a UI that
-  closely mimics standard Debian `apt`.
+  `busybox_apt` is a high-level package management frontend. It is a
+  lightweight interface to `dpkg` which handles repository management
+  and dependency resolution. It provides minimalist replacements for
+  the features found in the Advanced Package Tool (APT).
 
   Built with size-optimization and system recovery in mind, `busybox_apt`
   integrates directly into the BusyBox Kbuild system and utilizes internal
@@ -36,12 +35,11 @@ Features:
     are listed but NOT installed by default.
 
 ----------------
-```bash
 Using busybox_apt:
-
+```bash
   Usage: apt [-f] COMMAND [PACKAGE...]
 
-  High-level package manager
+  High-level package management frontend
 
   Options:
       -f, --fix-broken    Pass --force-depends to dpkg

@@ -10,11 +10,11 @@
 //config:	default y
 //config:	select DPKG
 //config:	help
-//config:	apt is a high-level package manager for Debian-based systems.
-//config:	It provides repository management and dependency resolution
-//config:	as a frontend to dpkg. It includes unique rescue features
-//config:	to manually extract packages using built-in utilities if
-//config:	the system package manager is broken.
+//config:	apt is a high-level package management frontend. It handles
+//config:	repository management and dependency resolution as a
+//config:	frontend to dpkg. It includes unique rescue features to
+//config:	manually extract packages using built-in utilities if the
+//config:	system package manager is broken.
 
 //applet:IF_APT(APPLET(apt, BB_DIR_USR_BIN, BB_SUID_DROP))
 
@@ -23,7 +23,7 @@
 //usage:#define apt_trivial_usage
 //usage:       "[-f] COMMAND [PACKAGE...]"
 //usage:#define apt_full_usage "\n\n"
-//usage:       "High-level package manager\n"
+//usage:       "High-level package management frontend\n"
 //usage:     "\nOptions:"
 //usage:     "\n	-f, --fix-broken	Pass --force-depends to dpkg"
 //usage:     "\nCommands:"
