@@ -8,7 +8,7 @@
 
 - **Professional UI**: Familiar output format with "Get:N", "Hit:N", and colored highlights.
 - **Progress Tracking**: Real-time progress bar at the bottom of the terminal during installations.
-- **System Rescue Toolkit**: Includes `reinstall`, `verify`, and `rescue-install` to repair corrupted systems.
+- **System Rescue Toolkit**: Includes `reinstall`, `verify`, `md5check`, and `rescue-install` to repair corrupted systems.
 - **Disk Usage Reporting**: Calculates and displays exactly how much disk space will be used or freed, just like standard `apt`.
 - **Manual Extraction (to /)**: `rescue-install` can bypass a broken `dpkg` by using BusyBox's **internal** `ar` and `tar` applets to manually extract package contents directly to the system root (`/`). This allows for system recovery even when the package manager or core utilities are non-functional.
 - **Repository Management**: Supports standard Debian-style `sources.list` files.
@@ -35,7 +35,8 @@ Commands:
     upgrade             Upgrade the system
     reinstall           Reinstall packages (restores files)
     rescue-install      Install packages bypassing dpkg (uses internal ar/tar to /)
-    verify              Verify package integrity (checks md5sums)
+    verify              Verify package sanity (check status, deps, and files)
+    md5check            Verify package integrity (checks md5sums)
     list --upgradable   Show packages with available updates
     search              Search for a package (alphabetically sorted)
 ```
@@ -46,7 +47,8 @@ Commands:
 - **Search for a package**: `./busybox apt search nano`
 - **Install a package**: `./busybox apt install nano`
 - **Reinstall a package**: `./busybox apt reinstall coreutils`
-- **Verify integrity**: `./busybox apt verify bash`
+- **Verify sanity**: `./busybox apt verify bash` (checks status, deps, missing files, and broken symlinks)
+- **Check integrity**: `./busybox apt md5check bash` (checks md5sums of all files)
 - **Rescue a system**: `./busybox apt rescue-install libc6` (bypasses broken dpkg; extracts directly to `/` using internal tools)
 - **List upgradable**: `./busybox apt list --upgradable`
 - **Upgrade all packages**: `./busybox apt upgrade`
@@ -68,7 +70,7 @@ To integrate `busybox_apt` into your BusyBox build, follow these steps:
     ```bash
     git clone https://github.com/michkochris/busybox_apt_orig busybox_apt
     ```
-    *(Note: Ensure the directory is named `busybox_apt` as the build system expects this path.)*
+    *(Note: Ensure the directory is named `busybox_apt` as the directory structure is fixed for the build system.)*
 
 3.  **Build automatically**:
     The easiest way to build is using the included automated script. **This script will automatically integrate the applet into the BusyBox build system for you**, configure it, and compile:

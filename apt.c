@@ -33,7 +33,8 @@
 //usage:     "\n	upgrade		Upgrade the system"
 //usage:     "\n	reinstall	Reinstall packages (restores files)"
 //usage:     "\n	rescue-install	Install packages bypassing dpkg (uses internal ar/tar to /)"
-//usage:     "\n	verify		Verify package integrity (checks md5sums)"
+//usage:     "\n	verify		Verify package sanity (deps, files & symlinks)"
+//usage:     "\n	md5check	Verify package integrity (checks md5sums)"
 //usage:     "\n	list --upgradable	Show packages with available updates"
 //usage:     "\n	search		Search for a package"
 
@@ -694,6 +695,90 @@ static int count_upgradable(void)
 }
 
 int apt_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
+static int check_deps_sanity(pkg_t *p)
+{
+	int failed_count = 0;
+	if (!p->depends && !p->pre_depends) return 0;
+
+	char *all_deps = xasprintf("%s%s%s",
+		p->pre_depends ? p->pre_depends : "",
+		(p->pre_depends && p->depends) ? ", " : "",
+		p->depends ? p->depends : "");
+
+	char *deps_copy = xstrdup(all_deps);
+	char *saveptr;
+	char *dep_entry = strtok_r(deps_copy, ",", &saveptr);
+
+	while (dep_entry) {
+		char *or_saveptr;
+		char *alt;
+		char *dep_entry_copy = xstrdup(dep_entry);
+		bool satisfied = false;
+
+		alt = strtok_r(dep_entry_copy, "|", &or_saveptr);
+		while (alt) {
+			char *clean_alt = skip_whitespace(alt);
+			char *p_spec = strpbrk(clean_alt, " (:");
+			if (p_spec) *p_spec = '\0';
+
+			if (is_installed(clean_alt)) {
+				satisfied = true;
+				break;
+			}
+			alt = strtok_r(NULL, "|", &or_saveptr);
+		}
+
+		if (!satisfied) {
+			printf("    %s[ERROR]%s Missing dependency: %s\n", CLR_RED, CLR_RESET, dep_entry);
+			failed_count++;
+		}
+		free(dep_entry_copy);
+		dep_entry = strtok_r(NULL, ",", &saveptr);
+	}
+	free(deps_copy);
+	free(all_deps);
+	return failed_count;
+}
+
+static int check_files_sanity(const char *pkg_name)
+{
+	int failed_count = 0;
+	char *list_file = xasprintf("/var/lib/dpkg/info/%s.list", pkg_name);
+	FILE *f = fopen(list_file, "r");
+	char *line;
+
+	/* Try arch-qualified list file */
+	if (!f) {
+		free(list_file);
+		list_file = xasprintf("/var/lib/dpkg/info/%s:%s.list", pkg_name, get_debian_arch());
+		f = fopen(list_file, "r");
+	}
+
+	if (!f) {
+		printf("    %s[WARN]%s Could not find file list (.list)\n", CLR_RED, CLR_RESET);
+		free(list_file);
+		return 1;
+	}
+
+	while ((line = xmalloc_fgetline(f)) != NULL) {
+		struct stat st;
+		if (lstat(line, &st) != 0) {
+			printf("    %s[MISSING]%s %s\n", CLR_RED, CLR_RESET, line);
+			failed_count++;
+		} else if (S_ISLNK(st.st_mode)) {
+			struct stat st2;
+			if (stat(line, &st2) != 0) {
+				printf("    %s[BROKEN LINK]%s %s\n", CLR_RED, CLR_RESET, line);
+				failed_count++;
+			}
+		}
+		free(line);
+	}
+	fclose(f);
+	free(list_file);
+	return failed_count;
+}
+
 int apt_main(int argc, char **argv)
 {
 	const char *cmd = NULL;
@@ -1178,29 +1263,93 @@ int apt_main(int argc, char **argv)
 		}
 	} else if (strcmp(cmd, "verify") == 0) {
 		if (argc == 0) bb_show_usage();
+		load_all_packages();
+		load_installed_packages();
+		for (i = 0; i < argc; i++) {
+			pkg_t *p = find_package(argv[i]);
+			bool installed = is_installed(argv[i]);
+			int total_failed = 0;
+
+			printf("%sVerifying package:%s %s\n", CLR_BOLD, CLR_RESET, argv[i]);
+			printf("  [INFO] Status:  %s%s%s\n",
+				installed ? CLR_GREEN : CLR_RED,
+				installed ? "Installed" : "NOT INSTALLED / BROKEN",
+				CLR_RESET);
+
+			if (p) {
+				printf("  [INFO] Version: %s\n", p->version);
+				if (installed) {
+					printf("  [CHECK] Dependencies... ");
+					fflush(stdout);
+					int d_failed = check_deps_sanity(p);
+					if (d_failed == 0) printf("%sOK%s\n", CLR_GREEN, CLR_RESET);
+					else printf("%sFAILED (%d missing)%s\n", CLR_RED, d_failed, CLR_RESET);
+
+					printf("  [CHECK] Filesystem... ");
+					fflush(stdout);
+					int f_failed = check_files_sanity(argv[i]);
+					if (f_failed == 0) printf("%sOK%s\n", CLR_GREEN, CLR_RESET);
+					else printf("%sFAILED (%d issues)%s\n", CLR_RED, f_failed, CLR_RESET);
+
+					total_failed = d_failed + f_failed;
+				} else {
+					total_failed = 1;
+				}
+			} else {
+				printf("  [WARN] Package metadata not found in cache.\n");
+				total_failed = 1;
+			}
+
+			printf("  [RESULT] Sanity check: %s%s%s\n",
+				total_failed == 0 ? CLR_GREEN : CLR_RED,
+				total_failed == 0 ? "PASSED" : "FAILED",
+				CLR_RESET);
+			printf("\n");
+		}
+	} else if (strcmp(cmd, "md5check") == 0) {
+		if (argc == 0) bb_show_usage();
 		for (i = 0; i < argc; i++) {
 			char *sums_file = xasprintf("/var/lib/dpkg/info/%s.md5sums", argv[i]);
 			FILE *f = fopen(sums_file, "r");
+
+			/* Try arch-qualified name if base name fails */
+			if (!f) {
+				free(sums_file);
+				sums_file = xasprintf("/var/lib/dpkg/info/%s:%s.md5sums", argv[i], get_debian_arch());
+				f = fopen(sums_file, "r");
+			}
+
 			if (!f) {
 				bb_error_msg("no md5sums for %s", argv[i]);
 				free(sums_file);
 				continue;
 			}
+
 			printf("Verifying %s...\n", argv[i]);
 			char *line;
+			int checked = 0, failed = 0;
 			while ((line = xmalloc_fgetline(f)) != NULL) {
 				char *md5 = strtok(line, " \t");
 				char *fname = strtok(NULL, " \t");
 				if (md5 && fname) {
-					/* Standard md5sums file has paths relative to root without leading / */
-					char *cmd_md5 = xasprintf("echo \"%s  /%s\" | md5sum -c --status 2>/dev/null", md5, fname);
+					/* Ensure fname has leading / if it doesn't */
+					char *path = (fname[0] == '/') ? xstrdup(fname) : xasprintf("/%s", fname);
+					char *cmd_md5 = xasprintf("echo \"%s  %s\" | md5sum -c --status 2>/dev/null", md5, path);
 					if (system(cmd_md5) != 0) {
-						printf("%s/%s: FAILED%s\n", CLR_RED, fname, CLR_RESET);
+						printf("%s%s: FAILED%s\n", CLR_RED, path, CLR_RESET);
+						failed++;
 					}
+					checked++;
 					free(cmd_md5);
+					free(path);
 				}
 				free(line);
 			}
+			if (failed == 0)
+				printf("%sVerification successful:%s all %d files match md5sums.\n", CLR_GREEN, CLR_RESET, checked);
+			else
+				printf("%sVerification failed:%s %d of %d files are corrupted.\n", CLR_RED, CLR_RESET, failed, checked);
+
 			fclose(f);
 			free(sums_file);
 		}
