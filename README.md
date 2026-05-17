@@ -8,6 +8,9 @@
 
 - **Professional UI**: Familiar output format with "Get:N", "Hit:N", and colored highlights.
 - **Progress Tracking**: Real-time progress bar at the bottom of the terminal during installations.
+- **System Rescue Toolkit**: Includes `reinstall`, `verify`, and `rescue-install` to repair corrupted systems.
+- **Disk Usage Reporting**: Calculates and displays exactly how much disk space will be used or freed, just like standard `apt`.
+- **Manual Extraction (to /)**: `rescue-install` can bypass a broken `dpkg` by using BusyBox's **internal** `ar` and `tar` applets to manually extract package contents directly to the system root (`/`). This allows for system recovery even when the package manager or core utilities are non-functional.
 - **Repository Management**: Supports standard Debian-style `sources.list` files.
 - **Dependency Resolution**: Automatically resolves recursive dependencies, including support for **Virtual Packages** via the `Provides:` field.
 - **Embedded-Friendly Dependencies**: To respect user freedom and keep systems lightweight, **Recommended packages are NOT installed by default**, though they are listed during resolution.
@@ -30,6 +33,9 @@ Commands:
     install             Install new packages
     remove              Remove packages
     upgrade             Upgrade the system
+    reinstall           Reinstall packages (restores files)
+    rescue-install      Install packages bypassing dpkg (uses internal ar/tar to /)
+    verify              Verify package integrity (checks md5sums)
     list --upgradable   Show packages with available updates
     search              Search for a package (alphabetically sorted)
 ```
@@ -39,6 +45,9 @@ Commands:
 - **Update package lists**: `./busybox apt update`
 - **Search for a package**: `./busybox apt search nano`
 - **Install a package**: `./busybox apt install nano`
+- **Reinstall a package**: `./busybox apt reinstall coreutils`
+- **Verify integrity**: `./busybox apt verify bash`
+- **Rescue a system**: `./busybox apt rescue-install libc6` (bypasses broken dpkg; extracts directly to `/` using internal tools)
 - **List upgradable**: `./busybox apt list --upgradable`
 - **Upgrade all packages**: `./busybox apt upgrade`
 - **Force install**: `./busybox apt -f install openbox` (forces dpkg depends)

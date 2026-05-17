@@ -12,7 +12,9 @@
 //config:	help
 //config:	apt is a high-level package manager for Debian-based systems.
 //config:	It provides repository management and dependency resolution
-//config:	as a frontend to dpkg.
+//config:	as a frontend to dpkg. It includes unique rescue features
+//config:	to manually extract packages using built-in utilities if
+//config:	the system package manager is broken.
 
 //applet:IF_APT(APPLET(apt, BB_DIR_USR_BIN, BB_SUID_DROP))
 
@@ -24,12 +26,15 @@
 //usage:       "High-level package manager\n"
 //usage:     "\nOptions:"
 //usage:     "\n	-f, --fix-broken	Pass --force-depends to dpkg"
-//usage:     "\n\nCommands:"
+//usage:     "\nCommands:"
 //usage:     "\n	update		Update list of available packages"
 //usage:     "\n	install		Install new packages"
 //usage:     "\n	remove		Remove packages"
 //usage:     "\n	upgrade		Upgrade the system"
-//usage:     "\n	list --upgradable	List upgradable packages"
+//usage:     "\n	reinstall	Reinstall packages (restores files)"
+//usage:     "\n	rescue-install	Install packages bypassing dpkg (uses internal ar/tar to /)"
+//usage:     "\n	verify		Verify package integrity (checks md5sums)"
+//usage:     "\n	list --upgradable	Show packages with available updates"
 //usage:     "\n	search		Search for a package"
 
 #include "libbb.h"
@@ -37,6 +42,7 @@
 
 /* ANSI Colors */
 #define CLR_GREEN  "\033[0;32m"
+#define CLR_RED    "\033[0;31m"
 #define CLR_BOLD   "\033[1m"
 #define CLR_RESET  "\033[0m"
 #define CLR_BG_GREEN "\033[42m"
@@ -220,6 +226,7 @@ typedef struct pkg_s {
 	char *filename;
 	char *repo_uri;
 	long size;
+	long installed_size;
 	int state; /* 0: unvisited, 1: queued, 2: installing */
 	struct pkg_s *next;
 } pkg_t;
@@ -261,14 +268,31 @@ static pkg_t *find_package(const char *name)
 	return NULL;
 }
 
+typedef struct {
+	char *name;
+	long size;
+} pkg_info_t;
+
 static bool is_installed(const char *pkg_name)
 {
 	llist_t *curr = installed_packages;
 	while (curr) {
-		if (strcmp((char *)curr->data, pkg_name) == 0) return true;
+		pkg_info_t *info = (pkg_info_t *)curr->data;
+		if (strcmp(info->name, pkg_name) == 0) return true;
 		curr = curr->link;
 	}
 	return false;
+}
+
+static long get_installed_size(const char *pkg_name)
+{
+	llist_t *curr = installed_packages;
+	while (curr) {
+		pkg_info_t *info = (pkg_info_t *)curr->data;
+		if (strcmp(info->name, pkg_name) == 0) return info->size;
+		curr = curr->link;
+	}
+	return 0;
 }
 
 static void load_installed_packages(void)
@@ -276,6 +300,7 @@ static void load_installed_packages(void)
 	FILE *f;
 	char *line;
 	char *curr_pkg = NULL;
+	long curr_size = 0;
 	bool installed = false;
 
 	f = fopen_for_read("/var/lib/dpkg/status");
@@ -286,6 +311,8 @@ static void load_installed_packages(void)
 			curr_pkg = xstrdup(skip_whitespace(line + 9));
 		} else if (strncmp(line, "Status: ", 8) == 0) {
 			if (strstr(line, "installed")) installed = true;
+		} else if (strncmp(line, "Installed-Size: ", 16) == 0) {
+			curr_size = atol(skip_whitespace(line + 16));
 		} else if (strncmp(line, "Provides: ", 10) == 0) {
 			if (installed && curr_pkg) {
 				char *prov_copy = xstrdup(skip_whitespace(line + 10));
@@ -295,18 +322,27 @@ static void load_installed_packages(void)
 					char *clean = skip_whitespace(token);
 					char *p_spec = strpbrk(clean, " (:");
 					if (p_spec) *p_spec = '\0';
-					llist_add_to(&installed_packages, xstrdup(clean));
+
+					pkg_info_t *info = xzalloc(sizeof(pkg_info_t));
+					info->name = xstrdup(clean);
+					info->size = 0;
+					llist_add_to(&installed_packages, info);
+
 					token = strtok_r(NULL, ",", &saveptr);
 				}
 				free(prov_copy);
 			}
 		} else if (*line == '\0') {
 			if (installed && curr_pkg) {
-				llist_add_to(&installed_packages, curr_pkg);
+				pkg_info_t *info = xzalloc(sizeof(pkg_info_t));
+				info->name = curr_pkg;
+				info->size = curr_size;
+				llist_add_to(&installed_packages, info);
 				curr_pkg = NULL;
 			}
 			free(curr_pkg); curr_pkg = NULL;
 			installed = false;
+			curr_size = 0;
 		}
 		free(line);
 	}
@@ -314,14 +350,14 @@ static void load_installed_packages(void)
 	fclose(f);
 }
 
-static void resolve_deps(pkg_t *p)
+static void resolve_deps(pkg_t *p, bool force)
 {
 	char *deps_copy;
 	char *saveptr;
 	char *dep_entry;
 
 	if (!p || p->state != 0) return;
-	if (is_installed(p->name)) return;
+	if (!force && is_installed(p->name)) return;
 
 	p->state = 1; /* Mark as queued to avoid loops */
 
@@ -359,7 +395,7 @@ static void resolve_deps(pkg_t *p)
 					alt = strtok_r(NULL, "|", &or_saveptr);
 				}
 				free(dep_entry_copy);
-				if (to_install) resolve_deps(to_install);
+				if (to_install) resolve_deps(to_install, false);
 			}
 			pre_entry = strtok_r(NULL, ",", &pre_saveptr);
 		}
@@ -409,7 +445,7 @@ static void resolve_deps(pkg_t *p)
 				free(dep_entry_copy);
 
 				if (to_install) {
-					resolve_deps(to_install);
+					resolve_deps(to_install, false);
 				}
 			}
 			dep_entry = strtok_r(NULL, ",", &saveptr);
@@ -477,6 +513,9 @@ static void parse_package_file(const char *filename, const char *repo_uri)
 			last_field = &curr->filename;
 		} else if (curr && strncmp(line, "Size: ", 6) == 0) {
 			curr->size = atol(skip_whitespace(line + 6));
+			last_field = NULL;
+		} else if (curr && strncmp(line, "Installed-Size: ", 16) == 0) {
+			curr->installed_size = atol(skip_whitespace(line + 16));
 			last_field = NULL;
 		} else {
 			last_field = NULL;
@@ -713,7 +752,9 @@ int apt_main(int argc, char **argv)
 		printf("Reading state information... Done\n");
 		if (upgradable > 0)
 			printf("%d packages can be upgraded. Run 'apt list --upgradable' to see them.\n", upgradable);
-	} else if (strcmp(cmd, "install") == 0) {
+	} else if (strcmp(cmd, "install") == 0 || strcmp(cmd, "reinstall") == 0 || strcmp(cmd, "rescue-install") == 0) {
+		bool is_reinstall = (strcmp(cmd, "reinstall") == 0);
+		bool is_rescue = (strcmp(cmd, "rescue-install") == 0);
 		llist_t *curr;
 		int count;
 		long total_size;
@@ -729,15 +770,15 @@ int apt_main(int argc, char **argv)
 		printf("Reading state information... Done\n");
 
 		for (i = 0; i < argc; i++) {
-			if (is_installed(argv[i])) {
-				bb_info_msg("%s is already the newest version.", argv[i]);
+			pkg_t *p = find_package(argv[i]);
+			if (!p) {
+				bb_error_msg("E: Unable to locate package %s", argv[i]);
+				continue;
+			}
+			if (is_reinstall || is_rescue || !is_installed(argv[i])) {
+				resolve_deps(p, true);
 			} else {
-				pkg_t *p = find_package(argv[i]);
-				if (p) {
-					resolve_deps(p);
-				} else {
-					bb_error_msg("E: Unable to locate package %s", argv[i]);
-				}
+				bb_info_msg("%s is already the newest version.", argv[i]);
 			}
 		}
 
@@ -780,15 +821,21 @@ int apt_main(int argc, char **argv)
 		printf("The following %sNEW%s packages will be installed:\n ", CLR_BOLD, CLR_RESET);
 		count = 0;
 		total_size = 0;
+		long total_installed_size = 0;
 		for (curr = install_queue; curr; curr = curr->link) {
 			pkg_t *p = (pkg_t *)curr->data;
 			printf(" %s", p->name);
 			count++;
 			total_size += p->size;
+			total_installed_size += p->installed_size;
+			total_installed_size -= get_installed_size(p->name);
 		}
 		printf("\n0 upgraded, %d newly installed, 0 to remove and 0 not upgraded.\n", count);
 		printf("Need to get %ld kB of archives.\n", total_size / 1024);
-		printf("After this operation, 0 B of additional disk space will be used.\n");
+		if (total_installed_size >= 0)
+			printf("After this operation, %ld kB of additional disk space will be used.\n", total_installed_size);
+		else
+			printf("After this operation, %ld kB disk space will be freed.\n", -total_installed_size);
 		printf("%sDo you want to continue? [Y/n]%s ", CLR_BOLD, CLR_RESET);
 		fflush(stdout);
 
@@ -825,7 +872,21 @@ int apt_main(int argc, char **argv)
 		}
 		update_progress(total, total, "Done");
 
-		if (*dpkg_args) {
+		if (is_rescue) {
+			printf("\033[%d;1H", h - 1);
+			bb_info_msg("Rescue Mode: Manually extracting packages...");
+			for (curr = install_queue; curr; curr = curr->link) {
+				pkg_t *p = (pkg_t *)curr->data;
+				char *tmp_deb = xasprintf("/tmp/%s.deb", p->name);
+				/* Try extracting data.tar.xz first, then data.tar.gz */
+				char *rescue_cmd = xasprintf("ar -p %s data.tar.xz 2>/dev/null | tar -C / -xJ 2>/dev/null || "
+				                             "ar -p %s data.tar.gz 2>/dev/null | tar -C / -xz", tmp_deb, tmp_deb);
+				printf("  Extracting %s...\n", p->name);
+				system(rescue_cmd);
+				free(rescue_cmd);
+				free(tmp_deb);
+			}
+		} else if (*dpkg_args) {
 			char *dpkg_cmd = xasprintf("dpkg%s -i %s", dpkg_force, dpkg_args);
 			printf("\033[%d;1H", h - 1);
 			bb_info_msg("Configuring packages...");
@@ -905,7 +966,7 @@ int apt_main(int argc, char **argv)
 					if (installed && curr_pkg && curr_ver) {
 						pkg_t *p = find_package(curr_pkg);
 						if (p && compare_versions(p->version, curr_ver) > 0) {
-							resolve_deps(p);
+							resolve_deps(p, true);
 						}
 					}
 					free(curr_pkg); curr_pkg = NULL;
@@ -917,7 +978,7 @@ int apt_main(int argc, char **argv)
 			if (installed && curr_pkg && curr_ver) {
 				pkg_t *p = find_package(curr_pkg);
 				if (p && compare_versions(p->version, curr_ver) > 0) {
-					resolve_deps(p);
+					resolve_deps(p, true);
 				}
 			}
 			free(curr_pkg);
@@ -963,6 +1024,7 @@ int apt_main(int argc, char **argv)
 		}
 
 		total_size = 0;
+		long total_installed_size_upg = 0;
 		printf("The following packages will be upgraded:\n ");
 		curr = install_queue;
 		count = 0;
@@ -971,11 +1033,16 @@ int apt_main(int argc, char **argv)
 			printf(" %s", p->name);
 			count++;
 			total_size += p->size;
+			total_installed_size_upg += p->installed_size;
+			total_installed_size_upg -= get_installed_size(p->name);
 			curr = curr->link;
 		}
 		printf("\n%d upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n", count);
 		printf("Need to get %ld kB of archives.\n", total_size / 1024);
-		printf("After this operation, 0 B of additional disk space will be used.\n");
+		if (total_installed_size_upg >= 0)
+			printf("After this operation, %ld kB of additional disk space will be used.\n", total_installed_size_upg);
+		else
+			printf("After this operation, %ld kB disk space will be freed.\n", -total_installed_size_upg);
 		printf("%sDo you want to continue? [Y/n]%s ", CLR_BOLD, CLR_RESET);
 		fflush(stdout);
 
@@ -1108,6 +1175,34 @@ int apt_main(int argc, char **argv)
 				}
 			}
 			free(results);
+		}
+	} else if (strcmp(cmd, "verify") == 0) {
+		if (argc == 0) bb_show_usage();
+		for (i = 0; i < argc; i++) {
+			char *sums_file = xasprintf("/var/lib/dpkg/info/%s.md5sums", argv[i]);
+			FILE *f = fopen(sums_file, "r");
+			if (!f) {
+				bb_error_msg("no md5sums for %s", argv[i]);
+				free(sums_file);
+				continue;
+			}
+			printf("Verifying %s...\n", argv[i]);
+			char *line;
+			while ((line = xmalloc_fgetline(f)) != NULL) {
+				char *md5 = strtok(line, " \t");
+				char *fname = strtok(NULL, " \t");
+				if (md5 && fname) {
+					/* Standard md5sums file has paths relative to root without leading / */
+					char *cmd_md5 = xasprintf("echo \"%s  /%s\" | md5sum -c --status 2>/dev/null", md5, fname);
+					if (system(cmd_md5) != 0) {
+						printf("%s/%s: FAILED%s\n", CLR_RED, fname, CLR_RESET);
+					}
+					free(cmd_md5);
+				}
+				free(line);
+			}
+			fclose(f);
+			free(sums_file);
 		}
 	} else {
 		bb_show_usage();

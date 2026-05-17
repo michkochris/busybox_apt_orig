@@ -8,6 +8,8 @@ config APT
 	help
 	apt is a high-level package manager for Debian-based systems.
 	It provides repository management and dependency resolution
-	as a frontend to dpkg.
+	as a frontend to dpkg. It includes unique rescue features
+	to manually extract packages using built-in utilities if
+	the system package manager is broken.
 
 endmenu
