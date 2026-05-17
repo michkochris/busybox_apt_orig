@@ -1,7 +1,5 @@
 # busybox_apt
 
-Please see the LICENSE file for details on copying and usage.
-
 What is busybox_apt:
 
   `busybox_apt` is a high-level package management frontend. It is a
@@ -57,13 +55,13 @@ Using busybox_apt:
       search              Search for a package (alphabetically sorted)
 ```
   Examples:
-
-    $ ./busybox apt update
-    $ ./busybox apt install nano
-    $ ./busybox apt verify bash
-    $ ./busybox apt md5check coreutils
-    $ ./busybox apt rescue-install libc6
-
+```bash
+./busybox apt update
+./busybox apt install nano
+./busybox apt verify bash
+./busybox apt md5check coreutils
+./busybox apt rescue-install libc6
+```
 ----------------
 
 Rescue Workflow:
@@ -84,18 +82,27 @@ Build Instructions:
 
   To integrate `busybox_apt` into your BusyBox build:
 
+  0. optionally wget busybox source
+```bash
+wget https://busybox.net/downloads/busybox-1.37.0.tar.bz2
+tar -xvjf busybox-1.37.0.tar.bz2
+cd busybox-1.37.0
+```
   1. Clone this repository into the root of your BusyBox source tree:
-     $ git clone https://github.com/michkochris/busybox_apt_orig busybox_apt
-
+```bash
+git clone https://github.com/michkochris/busybox_apt_orig busybox_apt
+```
   2. Automated Build:
      The included script will integrate the applet, configure, and compile:
-     $ ./busybox_apt/busybox_build.sh
-
+```bash
+./busybox_apt/busybox_build.sh
+```
   3. Manual Integration:
-     $ patch -p0 < busybox_apt/busybox_apt.patch
-     $ make menuconfig  # Enable 'apt' under 'Applets' -> 'Busybox APT'
-     $ make
-
+```bash
+patch -p0 < busybox_apt/busybox_apt.patch
+make menuconfig  # Enable 'apt' under 'Applets' -> 'Busybox APT'
+make
+```
 ----------------
 
 License:
