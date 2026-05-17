@@ -1,97 +1,113 @@
 # busybox_apt
 
-**Stable Release**
+Please see the LICENSE file for details on copying and usage.
 
-`busybox_apt` is a lightweight, professional implementation of the Advanced Package Tool (APT) designed specifically as an applet for the BusyBox environment. It provides a high-level frontend to `dpkg`, handling repository management, dependency resolution, and automated updates with a UI that closely mimics standard Debian `apt`.
+What is busybox_apt:
 
-## Features
+  `busybox_apt` is a lightweight, professional implementation of the Advanced
+  Package Tool (APT) designed specifically as an applet for the BusyBox
+  environment. It provides a high-level frontend to `dpkg`, handling repository
+  management, dependency resolution, and automated updates with a UI that
+  closely mimics standard Debian `apt`.
 
-- **Professional UI**: Familiar output format with "Get:N", "Hit:N", and colored highlights.
-- **Progress Tracking**: Real-time progress bar at the bottom of the terminal during installations.
-- **System Rescue Toolkit**: Includes `reinstall`, `verify`, `md5check`, and `rescue-install` to repair corrupted systems.
-- **Disk Usage Reporting**: Calculates and displays exactly how much disk space will be used or freed, just like standard `apt`.
-- **Manual Extraction (to /)**: `rescue-install` can bypass a broken `dpkg` by using BusyBox's **internal** `ar` and `tar` applets to manually extract package contents directly to the system root (`/`). This allows for system recovery even when the package manager or core utilities are non-functional.
-- **Repository Management**: Supports standard Debian-style `sources.list` files.
-- **Dependency Resolution**: Automatically resolves recursive dependencies, including support for **Virtual Packages** via the `Provides:` field.
-- **Embedded-Friendly Dependencies**: To respect user freedom and keep systems lightweight, **Recommended packages are NOT installed by default**, though they are listed during resolution.
-- **Debian-Style Versioning**: Robust version comparison logic including support for epochs, revisions, and the special `~` sorting character.
-- **Safety Checks**: Confirmation prompts and download size calculations before any changes.
-- **Optimized for BusyBox**: Minimal footprint, written in C and fully integrated into the Kbuild system.
+  Built with size-optimization and system recovery in mind, `busybox_apt`
+  integrates directly into the BusyBox Kbuild system and utilizes internal
+  applets for critical operations. This makes it a robust choice for embedded
+  systems, rescue disks, and minimalist Debian-based environments where a
+  full `apt` installation is too heavy or when the system manager is broken.
 
-## Usage
+----------------
 
-```
-Usage: apt [-f] COMMAND [PACKAGE...]
+Features:
 
-High-level package manager
+  * Professional UI: Familiar output format with "Get:N", "Hit:N", and real-time
+    progress tracking via a terminal-aware progress bar.
+  * Dependency Resolution: Automatically resolves recursive dependencies,
+    including support for Virtual Packages (via `Provides:`).
+  * System Rescue Toolkit: Specialized commands like `reinstall`, `verify`,
+    and `rescue-install` for repairing corrupted systems.
+  * Disk Usage Reporting: Accurate calculation of disk space used or freed
+    after operations, tracking individual package installed-sizes.
+  * Manual Extraction: `rescue-install` bypasses broken `dpkg` instances by
+    using internal `ar` and `tar` applets to extract payloads directly to `/`.
+  * Debian-Style Versioning: Robust comparison logic supporting epochs,
+    revisions, and the `~` sorting character.
+  * Lightweight Defaults: To respect system resources, Recommended packages
+    are listed but NOT installed by default.
 
-Options:
-    -f, --fix-broken    Pass --force-depends to dpkg
+----------------
 
-Commands:
-    update              Update list of available packages
-    install             Install new packages
-    remove              Remove packages
-    upgrade             Upgrade the system
-    reinstall           Reinstall packages (restores files)
-    rescue-install      Install packages bypassing dpkg (uses internal ar/tar to /)
-    verify              Verify package sanity (check status, deps, and files)
-    md5check            Verify package integrity (checks md5sums)
-    list --upgradable   Show packages with available updates
-    search              Search for a package (alphabetically sorted)
-```
+Using busybox_apt:
 
-### Examples
+  Usage: apt [-f] COMMAND [PACKAGE...]
 
-- **Update package lists**: `./busybox apt update`
-- **Search for a package**: `./busybox apt search nano`
-- **Install a package**: `./busybox apt install nano`
-- **Reinstall a package**: `./busybox apt reinstall coreutils`
-- **Verify sanity**: `./busybox apt verify bash` (checks status, deps, missing files, and broken symlinks)
-- **Check integrity**: `./busybox apt md5check bash` (checks md5sums of all files)
-- **Rescue a system**: `./busybox apt rescue-install libc6` (bypasses broken dpkg; extracts directly to `/` using internal tools)
-- **List upgradable**: `./busybox apt list --upgradable`
-- **Upgrade all packages**: `./busybox apt upgrade`
-- **Force install**: `./busybox apt -f install openbox` (forces dpkg depends)
+  High-level package manager
 
-## Build Instructions
+  Options:
+      -f, --fix-broken    Pass --force-depends to dpkg
 
-To integrate `busybox_apt` into your BusyBox build, follow these steps:
+  Commands:
+      update              Update list of available packages
+      install             Install new packages
+      remove              Remove packages
+      upgrade             Upgrade the system
+      reinstall           Reinstall packages (restores files)
+      rescue-install      Install packages bypassing dpkg (uses internal ar/tar to /)
+      verify              Verify package sanity (check status, deps, and files)
+      md5check            Verify package integrity (checks md5sums)
+      list --upgradable   Show packages with available updates
+      search              Search for a package (alphabetically sorted)
 
-1.  **Download and extract BusyBox**:
-    ```bash
-    wget https://busybox.net/downloads/busybox-1.37.0.tar.bz2
-    tar -xvjf busybox-1.37.0.tar.bz2
-    cd busybox-1.37.0
-    ```
+  Examples:
 
-2.  **Clone this repository**:
-    Clone the `busybox_apt` tool into the root of your BusyBox source tree:
-    ```bash
-    git clone https://github.com/michkochris/busybox_apt_orig busybox_apt
-    ```
-    *(Note: Ensure the directory is named `busybox_apt` as the directory structure is fixed for the build system.)*
+    $ ./busybox apt update
+    $ ./busybox apt install nano
+    $ ./busybox apt verify bash
+    $ ./busybox apt md5check coreutils
+    $ ./busybox apt rescue-install libc6
 
-3.  **Build automatically**:
-    The easiest way to build is using the included automated script. **This script will automatically integrate the applet into the BusyBox build system for you**, configure it, and compile:
-    ```bash
-    ./busybox_apt/busybox_build.sh
-    ```
+----------------
 
-4.  **Alternative: Manual Integration**:
-    If you prefer to integrate things yourself, use the provided patch file:
-    ```bash
-    patch -p0 < busybox_apt/busybox_apt.patch
-    make menuconfig  # Enable 'apt' under 'Applets' -> 'Busybox APT'
-    make
-    ```
+Rescue Workflow:
 
-## License
+  `busybox_apt` is uniquely suited for system recovery. When a critical
+  library or the package manager itself is corrupted:
 
-This project is licensed under the **GNU General Public License, version 2 (GPLv2)**, matching the license of the BusyBox project. See the `LICENSE` file for the full text.
+  1. Use `verify` to identify broken dependencies, missing files, or
+     dangling symlinks.
+  2. Use `md5check` to perform a bit-level validation of installed files.
+  3. Use `reinstall` to restore files via standard `dpkg` paths.
+  4. Use `rescue-install` as a failsafe to extract critical packages
+     directly to the root filesystem using BusyBox internal applets.
 
----
+----------------
 
-## **Contact**
-For feedback, bug reports, or inquiries, reach out at:
-[michkochris@gmail.com](mailto:michkochris@gmail.com) | [runepkg@gmail.com](mailto:runepkg@gmail.com)
+Build Instructions:
+
+  To integrate `busybox_apt` into your BusyBox build:
+
+  1. Clone this repository into the root of your BusyBox source tree:
+     $ git clone https://github.com/michkochris/busybox_apt_orig busybox_apt
+
+  2. Automated Build:
+     The included script will integrate the applet, configure, and compile:
+     $ ./busybox_apt/busybox_build.sh
+
+  3. Manual Integration:
+     $ patch -p0 < busybox_apt/busybox_apt.patch
+     $ make menuconfig  # Enable 'apt' under 'Applets' -> 'Busybox APT'
+     $ make
+
+----------------
+
+License:
+
+  This project is licensed under the GNU General Public License, version 2
+  (GPLv2), matching the license of the BusyBox project.
+
+----------------
+
+Contact:
+
+  For feedback, bug reports, or inquiries:
+  michkochris@gmail.com | runepkg@gmail.com
