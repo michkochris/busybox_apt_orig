@@ -33,6 +33,21 @@ Features:
     are listed but NOT installed by default.
 
 ----------------
+Repository Configuration:
+
+  `busybox_apt` requires a valid Debian-style repository configuration to
+  function. It parses `/etc/apt/sources.list` for repository definitions.
+
+  * **Environment Support**: If you are running `busybox_apt` on a non-Debian
+    distribution, you **must** manually create
+    `/etc/apt/sources.list` and provide at least one valid repository line.
+  * **Configuration Format**: It supports standard `deb` repository lines.
+    Example: `deb http://deb.debian.org/debian bookworm main`
+  * **Architecture**: The applet automatically detects your system architecture
+    (e.g., amd64, arm64) using `uname`, ensuring compatibility during
+    multi-arch system recovery.
+
+----------------
 Using busybox_apt:
 ```text
   Usage: apt [-f] COMMAND [PACKAGE...]
