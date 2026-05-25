@@ -2,14 +2,14 @@
 menu "Busybox APT"
 
 config APT
-	bool "apt (8 kb)"
-	default y
-	select DPKG
-	help
-	apt is a high-level package management frontend. It handles
-	repository management and dependency resolution as a
-	frontend to dpkg. It includes unique rescue features to
-	manually extract packages using built-in utilities if the
-	system package manager is broken.
+   bool "apt (8 kb)"
+   default y
+   select DPKG
+   help
+   apt is a high-level package management frontend. It handles
+   repository management and dependency resolution as a
+   frontend to dpkg. It includes unique rescue features to
+   manually extract packages using built-in utilities if the
+   system package manager is broken.
 
 endmenu

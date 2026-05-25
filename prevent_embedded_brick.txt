@@ -1,0 +1,87 @@
+The Bad News: Do NOT Press Y!
+From an embedded systems perspective, this is a disaster waiting to happen.
+
+Look closely at the numbers in your output:
+
+Need to get 970243 kB of archives.
+After this operation, 3834503 kB of additional disk space will be used.
+
+It is trying to unpack 3.8 Gigabytes of data. Most embedded Linux systems (like IoT devices, routers, or lightweight SBCs) only have between 16MB and 4GB of raw eMMC or flash storage. If you press Y, it will almost certainly fill your rootfs entirely, kernel-panic, and brick the device until you reflash it.
+
+how can we prevent that from happening, can we messure the install size against the size of the storage?
+
+Yes! That is exactly the right instinct. In embedded systems, you should never trust the user or the upstream repository to respect your hardware limits. You must actively defend the storage partition.
+
+In C, the standard POSIX way to measure available filesystem space is to use the statvfs function from <sys/statvfs.h>.
+
+Here is how we can implement a safeguard in your apt.c to prevent exactly this kind of disaster.
+
+1. Add the Include Header
+At the top of your apt.c file, right under your other includes, add the header for the virtual filesystem stats:
+
+C
+#include <sys/statvfs.h>
+2. Create the Disk Space Checker Function
+Add this helper function somewhere before your apt_main function. Notice that we don't just check for the exact size—we enforce a Safety Buffer (e.g., 50MB) because if a Linux root filesystem hits exactly 0 bytes free, the OS will lock up, logs will fail to write, and the system might panic.
+
+C
+static bool has_enough_disk_space(long required_kb)
+{
+    struct statvfs st;
+    unsigned long long free_kb;
+    unsigned long long safe_required_kb;
+
+    /* Check the root filesystem '/' (or change to '/var' if using separate partitions) */
+    if (statvfs("/", &st) != 0) {
+        bb_perror_msg("Failed to stat filesystem to check disk space");
+        /* Fail-safe: if we can't read the disk space, don't allow massive installs */
+        return false; 
+    }
+
+    /* f_bavail represents free blocks available to non-root users.
+       Multiply by fragment size to get bytes, then divide by 1024 for kB */
+    free_kb = ((unsigned long long)st.f_bavail * st.f_frsize) / 1024;
+
+    /* Add a 50MB (51200 kB) safety buffer so we don't completely brick the OS */
+    safe_required_kb = (required_kb > 0 ? required_kb : 0) + 51200;
+
+    if (free_kb < safe_required_kb) {
+        printf("\n%s[FATAL ERROR]%s Insufficient disk space!\n", CLR_RED, CLR_RESET);
+        printf("  Available: %llu kB\n", free_kb);
+        printf("  Required:  %lu kB (plus 50MB safety buffer)\n", required_kb);
+        return false;
+    }
+
+    return true;
+}
+3. Intercept the Install/Upgrade Process
+Now, drop this check into your install and upgrade logic inside apt_main. Look for the section where it calculates the size and asks the user "Do you want to continue? [Y/n]".
+
+Inject the check right before asking for confirmation:
+
+C
+       /* ... existing code calculating total_installed_size ... */
+       
+       printf("Need to get %ld kB of archives.\n", total_size / 1024);
+       if (total_installed_size >= 0)
+          printf("After this operation, %ld kB of additional disk space will be used.\n", total_installed_size);
+       else
+          printf("After this operation, %ld kB disk space will be freed.\n", -total_installed_size);
+       
+       /* --- NEW SAFETY CHECK HERE --- */
+       if (total_installed_size > 0 && !has_enough_disk_space(total_installed_size + (total_size / 1024))) {
+           bb_error_msg_and_die("Installation aborted to protect filesystem integrity.");
+       }
+       /* ----------------------------- */
+
+       printf("%sDo you want to continue? [Y/n]%s ", CLR_BOLD, CLR_RESET);
+       fflush(stdout);
+
+       if (!bb_ask_y_confirmation())
+          return EXIT_SUCCESS;
+Why this is a robust solution:
+st.f_bavail vs st.f_bfree: By using f_bavail, we are looking at the blocks available to unprivileged users. Linux ext4 filesystems typically reserve 5% of the disk strictly for the root user. This prevents a rogue application from starving the OS of disk space.
+
+Download + Extraction Buffer: In the check total_installed_size + (total_size / 1024), we account for the fact that both the downloaded .deb archives in /tmp AND the extracted files on the filesystem will exist simultaneously before the cleanup phase.
+
+Hard Abort: By using BusyBox's bb_error_msg_and_die(), if the check fails, the program immediately prints the error and exits with a non-zero status code, making it impossible for a careless user to press Y and bypass it.
